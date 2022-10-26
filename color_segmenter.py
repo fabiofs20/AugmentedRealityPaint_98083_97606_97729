@@ -2,8 +2,8 @@
 
 # ---------- Augmented Reality Paint ------------
 # Filipe Goncalves, 98083
-# Diogo Monteiro, 
-# Fábio Silva, 
+# Diogo Monteiro, 97606
+# Fábio Silva, 97729
 # 
 # PSR, October 2022.
 # -----------------------------------------------
