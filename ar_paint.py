@@ -117,7 +117,7 @@ def main():
             print("Please place your object in front of the camera")
 
         if args["video_canvas"]:
-            mask = np.not_equal(painter, 255)
+            mask = np.not_equal(cv2.cvtColor(painter, cv2.COLOR_BGR2GRAY), 255)
             image[mask] = painter
             painter = image
 
