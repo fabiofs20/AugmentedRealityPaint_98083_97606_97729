@@ -65,10 +65,8 @@ def main():
 
     # painter variables
     _, frame = capture.read()
-    if args["video_canvas"]:
-        painter = frame
-    else:
-        painter = np.ones((frame.shape[0], frame.shape[1], 3)) * 255
+
+    painter = np.ones((frame.shape[0], frame.shape[1], 3)) * 255
     color = (0,0,0)
     size_brush = 5
     last_point = None
@@ -117,6 +115,11 @@ def main():
             last_point = (int(centroids[max_label][0]), int(centroids[max_label][1]))
         else:
             print("Please place your object in front of the camera")
+
+        if args["video_canvas"]:
+            mask = np.not_equal(painter, 255)
+            image[mask] = painter
+            painter = image
 
         cv2.imshow(window_name, image)
         cv2.imshow(window_name_paint, painter)
