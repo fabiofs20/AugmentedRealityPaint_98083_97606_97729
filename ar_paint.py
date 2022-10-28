@@ -14,6 +14,7 @@ import numpy as np
 import copy
 import json
 import time
+import random
 
 def processImage(ranges, image):
 
@@ -46,6 +47,8 @@ def main():
     args = vars(parser.parse_args())
     print(args)
 
+    count = 0
+
     # start video capture
     capture = cv2.VideoCapture(0)
 
@@ -66,7 +69,59 @@ def main():
     # painter variables
     _, frame = capture.read()
 
-    painter = np.ones((frame.shape[0], frame.shape[1], 3)) * 255
+    h, w = frame.shape[0:2]
+
+    painter = np.ones((h, w, 3)) * 255
+    if args["paint_numeric"]:
+        # create paint numeric
+        evaluation = painter.copy()
+
+        lines = random.randint(2,2)
+
+        points = []
+
+        colors = [(255,0,0), (0,255,0), (0,0,255)]
+        last_color = (0,0,0)
+
+        for i in range(lines+1):
+
+            if i != lines:
+                points.append([(random.randint(int(w/lines)*i,int(w/lines)*(i+1)), 0), (random.randint(int(w/lines)*i,int(w/lines)*(i+1)), h)])
+            else:
+                points.append([[h,0], [h,w]])
+
+            if i == 0:
+                start_point = [0,0]
+                end_point = [0,599]
+            else:
+                start_point = points[i-1][0]
+                end_point = points[i-1][1]
+
+            pts = np.array([start_point, points[i][0], points[i][1], end_point], np.int32)
+            pts = pts.reshape((-1, 1, 2))
+
+            # evaluation
+            color = colors[random.randint(0,2)]
+            while last_color == color:
+                color = colors[random.randint(0,2)]
+
+            evaluation = cv2.fillPoly(evaluation, [pts], color)
+            point = (int((points[i][1][0] - start_point[0])/2))+start_point[0], int((end_point[1] - start_point[1])/2)
+
+            # painter
+            painter = cv2.putText(painter, str(colors.index(color)+1), point, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2, cv2.LINE_AA)
+            last_color = color
+
+        for i in range(len(points)):
+            cv2.line(evaluation, points[i][0], points[i][1], (0,0,0), 3, -1)
+            cv2.line(painter, points[i][0], points[i][1], (0,0,0), 3, -1)
+
+        temp = painter.copy()
+
+        total = np.sum(np.equal(evaluation, painter).astype(np.uint8))
+
+        print("Colors:\n1 - Blue\n2 - Green\n3 - Red")
+
     color = (0,0,0)
     size_brush = 5
     last_point = None
@@ -78,8 +133,6 @@ def main():
 
         # get frame
         ret, image = capture.read()
-
-        h, w = image.shape[0:2]
 
         # get key
         k = cv2.waitKey(1)
@@ -97,6 +150,7 @@ def main():
         # Find the largest non background component.
         # Note: range() starts from 1 since 0 is the background label.
         if nb_components > 1:
+            count = 0
             max_label, max_size = max([(i, stats[i, cv2.CC_STAT_AREA]) for i in range(1, nb_components)], key=lambda x: x[1])
 
             mr = np.equal(labels, max_label)
@@ -114,7 +168,9 @@ def main():
                 cv2.line(painter, last_point, (int(centroids[max_label][0]), int(centroids[max_label][1])), color, size_brush, -1)
             last_point = (int(centroids[max_label][0]), int(centroids[max_label][1]))
         else:
-            print("Please place your object in front of the camera")
+            if count == 0:
+                print("Please place your object in front of the camera!")
+                count += 1
 
         if args["video_canvas"]:
             mask = np.not_equal(cv2.cvtColor(painter, cv2.COLOR_BGR2GRAY), 255)
@@ -146,12 +202,27 @@ def main():
 
         # clear
         if k == ord("c"):
-            painter = np.ones((600, 600, 3)) * 255
+            painter = np.ones((frame.shape[0], frame.shape[1], 3)) * 255
+            if args["paint_numeric"]:
+                painter = temp
         
         # save
         if k == ord("w"):
             cv2.imwrite(f"drawing_{(time.ctime(time.time())).replace(' ', '_')}.png", painter)
+            if args["paint_numeric"]:
+                # do evaluation
+                max_pixels = (frame.shape[0] * frame.shape[1] * 3) - total
+                total = np.sum(np.equal(evaluation, painter).astype(np.uint8)) - total
 
+                accuracy = ((total / max_pixels) * 100)
+
+                print(f"Accuracy: {round(accuracy,2)}%")
+
+                cv2.destroyAllWindows()
+                cv2.imshow("Evaluation", evaluation)
+                cv2.imshow(window_name_paint, painter)
+                cv2.waitKey(0)
+                break
 
     # end capture and destroy windows
     capture.release()
