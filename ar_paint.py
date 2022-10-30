@@ -36,44 +36,8 @@ def processImage(ranges, image):
 
     return image_processed, mask
 
-def main():
-
-    parser = argparse.ArgumentParser(description='Definition of test mode')
-    parser.add_argument('-j', '--json', required=True, dest='JSON', help='Full path to json file.')
-    parser.add_argument('-v', '--video-canvas', required=False, help='Use video streaming as canvas', action="store_true", default=False)
-    parser.add_argument('-p', '--paint-numeric', required=False, help='Use a numerical canvas to paint', action="store_true", default=False)
-    parser.add_argument('-s', '--shake-detection', required=False, help='Use shake detection', action="store_true", default=False)
-
-    args = vars(parser.parse_args())
-    print(args)
-
-    count = 0
-
-    # start video capture
-    capture = cv2.VideoCapture(0)
-
-    # windows
-    window_name = 'Original'
-    cv2.namedWindow(window_name,cv2.WINDOW_AUTOSIZE)
-    window_name_paint = 'Painter'
-    cv2.namedWindow(window_name_paint,cv2.WINDOW_AUTOSIZE)
-    window_name_segmented = 'Segmented'
-    cv2.namedWindow(window_name_segmented,cv2.WINDOW_AUTOSIZE)
-    window_name_area = 'Largest Area'
-    cv2.namedWindow(window_name_area,cv2.WINDOW_AUTOSIZE)
-
-    # Opening JSON file
-    f = open(args["JSON"])
-    data = json.load(f)
-
-    # painter variables
-    _, frame = capture.read()
-
-    h, w = frame.shape[0:2]
-
-    painter = np.ones((h, w, 3)) * 255
-    if args["paint_numeric"]:
-        # create paint numeric
+def numericPainter(painter, w, h, ):
+    # create paint numeric
         evaluation = painter.copy()
 
         lines = random.randint(2,2)
@@ -121,6 +85,48 @@ def main():
         total = np.sum(np.equal(evaluation, painter).astype(np.uint8))
 
         print("Colors:\n1 - Blue\n2 - Green\n3 - Red")
+
+        return painter, evaluation, temp, total
+
+def main():
+
+    parser = argparse.ArgumentParser(description='Definition of test mode')
+    parser.add_argument('-j', '--json', required=True, dest='JSON', help='Full path to json file.')
+    parser.add_argument('-v', '--video-canvas', required=False, help='Use video streaming as canvas', action="store_true", default=False)
+    parser.add_argument('-p', '--paint-numeric', required=False, help='Use a numerical canvas to paint', action="store_true", default=False)
+    parser.add_argument('-s', '--shake-detection', required=False, help='Use shake detection', action="store_true", default=False)
+
+    args = vars(parser.parse_args())
+    print(args)
+
+    count = 0
+
+    # start video capture
+    capture = cv2.VideoCapture(0)
+
+    # windows
+    window_name = 'Original'
+    cv2.namedWindow(window_name,cv2.WINDOW_AUTOSIZE)
+    window_name_paint = 'Painter'
+    cv2.namedWindow(window_name_paint,cv2.WINDOW_AUTOSIZE)
+    window_name_segmented = 'Segmented'
+    cv2.namedWindow(window_name_segmented,cv2.WINDOW_AUTOSIZE)
+    window_name_area = 'Largest Area'
+    cv2.namedWindow(window_name_area,cv2.WINDOW_AUTOSIZE)
+
+    # Opening JSON file
+    f = open(args["JSON"])
+    data = json.load(f)
+
+    # painter variables
+    _, frame = capture.read()
+
+    h, w = frame.shape[0:2]
+
+    painter = np.ones((h, w, 3)) * 255
+    if args["paint_numeric"]:
+        # create paint numeric
+        painter, evaluation, temp, total = numericPainter(painter, w, h)
 
     color = (0,0,0)
     size_brush = 5
