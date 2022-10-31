@@ -15,7 +15,9 @@ import copy
 import json
 import time
 import random
+from colorama import Fore, Back, Style
 
+# processes the image to give us the binary image to calculate the centroid of the largest area
 def processImage(ranges, image):
 
     # processing
@@ -36,60 +38,96 @@ def processImage(ranges, image):
 
     return image_processed, mask
 
-def numericPainter(painter, w, h, ):
+# create numeric paint and the evaluation value
+def numericPainter(painter, w, h, last_color):
     # create paint numeric
-        evaluation = painter.copy()
+    evaluation_painter = painter.copy()
 
-        lines = random.randint(2,2)
+    # random number of lines
+    num_lines = random.randint(2,2)
 
-        points = []
+    # array for all the points necessary to build the lines and fill the gaps
+    points = []
 
-        colors = [(255,0,0), (0,255,0), (0,0,255)]
-        last_color = (0,0,0)
+    # colors used (b,g,r)
+    colors = [(255,0,0), (0,255,0), (0,0,255)]
 
-        for i in range(lines+1):
+    # calculate lines
+    for i in range(num_lines+1):
 
-            if i != lines:
-                points.append([(random.randint(int(w/lines)*i,int(w/lines)*(i+1)), 0), (random.randint(int(w/lines)*i,int(w/lines)*(i+1)), h)])
-            else:
-                points.append([[h,0], [h,w]])
+        # all lines and last line which is the final wall
+        if i != num_lines:
+            points.append([(random.randint(int(w/num_lines)*i,int(w/num_lines)*(i+1)), 0), (random.randint(int(w/num_lines)*i,int(w/num_lines)*(i+1)), w)])
+        else:
+            points.append([[w,0], [w,h]])
 
-            if i == 0:
-                start_point = [0,0]
-                end_point = [0,599]
-            else:
-                start_point = points[i-1][0]
-                end_point = points[i-1][1]
+        # start and end point for the polygon
+        if i == 0:
+            start_point = [0,0]
+            end_point = [0,h]
+        else:
+            start_point = points[i-1][0]
+            end_point = points[i-1][1]
 
-            pts = np.array([start_point, points[i][0], points[i][1], end_point], np.int32)
-            pts = pts.reshape((-1, 1, 2))
+        # all points for the polygon
+        pts = np.array([start_point, points[i][0], points[i][1], end_point], np.int32)
+        pts = pts.reshape((-1, 1, 2))
 
-            # evaluation
+        # color randomizer for each gap
+        color = colors[random.randint(0,2)]
+        while last_color == color:
             color = colors[random.randint(0,2)]
-            while last_color == color:
-                color = colors[random.randint(0,2)]
 
-            evaluation = cv2.fillPoly(evaluation, [pts], color)
-            point = (int((points[i][1][0] - start_point[0])/2))+start_point[0], int((end_point[1] - start_point[1])/2)
+        # create polygon to paint the right colors
+        evaluation_painter = cv2.fillPoly(evaluation_painter, [pts], color)
+        # points for the text in the center
+        point_txt = (int((points[i][1][0] - start_point[0])/2))+start_point[0], int((end_point[1] - start_point[1])/2)
 
-            # painter
-            painter = cv2.putText(painter, str(colors.index(color)+1), point, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2, cv2.LINE_AA)
-            last_color = color
+        # painter
+        painter = cv2.putText(painter, str(colors.index(color)+1), point_txt, cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2, cv2.LINE_AA)
 
-        for i in range(len(points)):
-            cv2.line(evaluation, points[i][0], points[i][1], (0,0,0), 3, -1)
-            cv2.line(painter, points[i][0], points[i][1], (0,0,0), 3, -1)
+        # save last color for next polygon
+        last_color = color
 
-        temp = painter.copy()
+    # create lines
+    for i in range(len(points)):
+        cv2.line(evaluation_painter, points[i][0], points[i][1], (0,0,0), 3, -1)
+        cv2.line(painter, points[i][0], points[i][1], (0,0,0), 3, -1)
 
-        total = np.sum(np.equal(evaluation, painter).astype(np.uint8))
+    # temp for clear
+    temp = painter.copy()
 
-        print("Colors:\n1 - Blue\n2 - Green\n3 - Red")
+    # number of pixels for the evaluation
+    total_pixels = np.sum(np.equal(evaluation_painter, painter).astype(np.uint8))
 
-        return painter, evaluation, temp, total
+    # print different colors and their number
+    print("Colors:\n"+ Style.BRIGHT + Fore.BLUE +"1 - Blue\n"+ Style.BRIGHT + Fore.GREEN +"2 - Green\n"+ Style.BRIGHT + Fore.RED +"3 - Red" + Style.RESET_ALL)
+
+    # return variables
+    return painter, evaluation_painter, temp, total_pixels
+
+# create image for commands
+def commands(canvas):
+    # text variables
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    org = (50, 50)
+    fontScale = 1
+    color = (255, 255, 255)
+    thickness = 2
+    
+    commands = ["q -> quit", "+ -> increase brush size", "- -> decrease brush size", "r -> change color to red",
+                "g -> change color to green", "b -> change color to blue", "c -> clear canvas", 
+                "w -> write image in file", "e -> erase", "s -> switch brush on/off"]
+
+    for c in range(len(commands)):
+        org = (50, 40*(c+1))
+        canvas = cv2.putText(canvas, commands[c], org, font, fontScale, color, thickness, cv2.LINE_AA)
+
+    return canvas
 
 def main():
 
+    # parse arguments
     parser = argparse.ArgumentParser(description='Definition of test mode')
     parser.add_argument('-j', '--json', required=True, dest='JSON', help='Full path to json file.')
     parser.add_argument('-v', '--video-canvas', required=False, help='Use video streaming as canvas', action="store_true", default=False)
@@ -99,6 +137,17 @@ def main():
     args = vars(parser.parse_args())
     print(args)
 
+    # Print the game (Typing Test) and the group membres
+    print('\n---------------------------------')
+    print('| ' + Style.BRIGHT + Fore.RED + 'PSR ' + Fore.GREEN + 'Augmented Reality Painter' + ' |' + Style.RESET_ALL)
+    print('|                               |')
+    print('|        Filipe Goncalves       |')
+    print('|         Diogo Monteiro        |')
+    print('|           Fábio Silva         |')
+    print('|                               |')
+    print('---------------------------------\n')
+
+    # print counter
     count = 0
 
     # start video capture
@@ -113,6 +162,8 @@ def main():
     cv2.namedWindow(window_name_segmented,cv2.WINDOW_AUTOSIZE)
     window_name_area = 'Largest Area'
     cv2.namedWindow(window_name_area,cv2.WINDOW_AUTOSIZE)
+    window_name_commands = 'Commands'
+    cv2.namedWindow(window_name_commands,cv2.WINDOW_AUTOSIZE)
 
     # Opening JSON file
     f = open(args["JSON"])
@@ -120,19 +171,27 @@ def main():
 
     # painter variables
     _, frame = capture.read()
-
-    h, w = frame.shape[0:2]
-
-    painter = np.ones((h, w, 3)) * 255
-    if args["paint_numeric"]:
-        # create paint numeric
-        painter, evaluation, temp, total = numericPainter(painter, w, h)
-
-    color = (0,0,0)
     size_brush = 5
     last_point = None
+    brush = True
+
+    # height and width of our captured frame
+    h, w = frame.shape[0:2]
+    # starter color
+    color = (0,0,0)
+
+    # create painter
+    painter = np.ones((h, w, 3)) * 255
+
+    if args["paint_numeric"]:
+        # create paint numeric
+        painter, evaluation_painter, temp, total_pixels = numericPainter(painter, w, h, color)
+
+
 
     mr = np.ones((frame.shape[0], frame.shape[1], 3)) * 0
+
+
 
     # while user wants video capture
     while True:
@@ -145,9 +204,10 @@ def main():
 
         # error getting the frame
         if not ret:
-            print("failed to grab frame")
+            print(Style.BRIGHT + Fore.RED + "failed to grab frame" + Style.RESET_ALL)
             break
 
+        # process image
         image_p, mask = processImage(data["limits"], image)
 
         connectivity = 4  
@@ -170,12 +230,12 @@ def main():
             # put text and highlight the center
             cv2.line(image, (int(centroids[max_label][0])+5, int(centroids[max_label][1])), (int(centroids[max_label][0])-5, int(centroids[max_label][1])), (0,0,255), 5, -1)
             cv2.line(image, (int(centroids[max_label][0]), int(centroids[max_label][1])+5), (int(centroids[max_label][0]), int(centroids[max_label][1])-5), (0,0,255), 5, -1)
-            if last_point != None:
+            if last_point != None and brush:
                 cv2.line(painter, last_point, (int(centroids[max_label][0]), int(centroids[max_label][1])), color, size_brush, -1)
             last_point = (int(centroids[max_label][0]), int(centroids[max_label][1]))
         else:
             if count == 0:
-                print("Please place your object in front of the camera!")
+                print(Style.BRIGHT + Fore.RED + "Please place your object in front of the camera!" + Style.RESET_ALL)
                 count += 1
 
         if args["video_canvas"]:
@@ -183,8 +243,10 @@ def main():
             image[mask] = painter
             painter = image
 
+        # show images
         cv2.imshow(window_name, image)
         cv2.imshow(window_name_paint, painter)
+        cv2.imshow(window_name_commands, commands(np.ones((frame.shape[0], frame.shape[1], 3)) * 0))
         cv2.imshow(window_name_segmented, image_p)
         cv2.imshow(window_name_area, mr.astype(np.uint8)*255)
 
@@ -216,24 +278,44 @@ def main():
         if k == ord("w"):
             cv2.imwrite(f"drawing_{(time.ctime(time.time())).replace(' ', '_')}.png", painter)
             if args["paint_numeric"]:
-                # do evaluation
-                max_pixels = (frame.shape[0] * frame.shape[1] * 3) - total
-                total = np.sum(np.equal(evaluation, painter).astype(np.uint8)) - total
+                # do evaluation_painter
+                max_pixels = (frame.shape[0] * frame.shape[1] * 3) - total_pixels
+                total_pixels = np.sum(np.equal(evaluation_painter, painter).astype(np.uint8)) - total_pixels
 
-                accuracy = ((total / max_pixels) * 100)
+                accuracy = ((total_pixels / max_pixels) * 100)
 
                 print(f"Accuracy: {round(accuracy,2)}%")
 
+                if accuracy < 40:
+                    print("Evaluation: "+ Style.BRIGHT + Fore.RED +"Not Sattisfactory - D" + Style.RESET_ALL)
+                elif accuracy < 60:
+                    print("Evaluation: " + Style.BRIGHT + Fore.CYAN +"Satisfactory - C" + Style.RESET_ALL)
+                elif accuracy < 80:
+                    print("Evaluation: " + Style.BRIGHT + Fore.BLUE +"Good - B" + Style.RESET_ALL)
+                elif accuracy < 90:
+                    print("Evaluation: " + Style.BRIGHT + Fore.GREEN +"Very Good - A" + Style.RESET_ALL)
+                else:
+                    print("Evaluation: " + Style.BRIGHT + Fore.YELLOW +"Excellent - A+" + Style.RESET_ALL)
+
                 cv2.destroyAllWindows()
-                cv2.imshow("Evaluation", evaluation)
+                cv2.imshow("Evaluation", evaluation_painter)
                 cv2.imshow(window_name_paint, painter)
                 cv2.waitKey(0)
                 break
 
+        # extra keys
+        # erase
+        if k == ord("e"):
+            color = (255,255,255)
+
+        # switch brush
+        if k == ord("s"):
+            brush = False if brush else True
+
+
     # end capture and destroy windows
     capture.release()
     cv2.destroyAllWindows()
-
 
 if __name__ == "__main__":
     main()
