@@ -95,7 +95,7 @@ def main():
         if k == ord("w"):
             file_name = 'limits.json'
             with open(file_name, 'w') as file_handle:
-                print('writing color limits to file ' + Style.BRIGHT + Fore.GREEN + file_name)
+                print('writing color limits to file ' + Style.BRIGHT + Fore.GREEN + file_name + Style.RESET_ALL)
                 json.dump({"limits": ranges}, file_handle)
             print({"limits": ranges})
             break

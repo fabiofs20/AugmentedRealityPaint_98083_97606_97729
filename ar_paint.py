@@ -14,8 +14,8 @@ import numpy as np
 import copy
 import json
 import time
+from colorama import Fore, Style
 import random
-from colorama import Fore, Back, Style
 
 # processes the image to give us the binary image to calculate the centroid of the largest area
 def processImage(ranges, image):
@@ -132,7 +132,8 @@ def main():
     parser.add_argument('-j', '--json', required=True, dest='JSON', help='Full path to json file.')
     parser.add_argument('-v', '--video-canvas', required=False, help='Use video streaming as canvas', action="store_true", default=False)
     parser.add_argument('-p', '--paint-numeric', required=False, help='Use a numerical canvas to paint', action="store_true", default=False)
-    parser.add_argument('-s', '--shake-detection', required=False, help='Use shake detection', action="store_true", default=False)
+    parser.add_argument('-s', '--use-shake-detection', required=False, help='Use shake detection', action="store_true", default=False)
+    parser.add_argument('-m', '--use-mouse', required=False, help='Use mouse as brush instead of centroid', action="store_true", default=False)
 
     args = vars(parser.parse_args())
     print(args)
@@ -171,26 +172,40 @@ def main():
 
     # painter variables
     _, frame = capture.read()
+
     size_brush = 5
     last_point = None
     brush = True
 
     # height and width of our captured frame
-    h, w = frame.shape[0:2]
+    height, width = frame.shape[0:2]
     # starter color
     color = (0,0,0)
 
     # create painter
-    painter = np.ones((h, w, 3)) * 255
+    painter = np.ones((height, width, 3), np.uint8) * 255
+
+    # min distance_squared between two consecutive points to be detected as an oscilation
+    shake_detection_threshold = 1600
+
+    # mask
+    mr = np.zeros((height, width, 3))
+
+    # mouse coordinates for mouse brush
+    mouse_coords = {'x': None, 'y': None}
+
+    if args['use_mouse']:
+        # pass {'x': int, 'y': int} dict as param
+        def mouseHoverCallback(event, x, y, flags, param):
+            if event == cv2.EVENT_MOUSEMOVE:
+                # mirror x coordinate, as the drawing is flipped horizontally
+                param['x'] = width - int(x)
+                param['y'] = int(y)
+        cv2.setMouseCallback(window_name_paint, mouseHoverCallback, mouse_coords)
 
     if args["paint_numeric"]:
         # create paint numeric
-        painter, evaluation_painter, temp, total_pixels = numericPainter(painter, w, h, color)
-
-
-
-    mr = np.ones((frame.shape[0], frame.shape[1], 3)) * 0
-
+        painter, evaluation_painter, temp, total_pixels = numericPainter(painter, width, height, color)
 
 
     # while user wants video capture
@@ -198,6 +213,7 @@ def main():
 
         # get frame
         ret, image = capture.read()
+        cam_output = image
 
         # get key
         k = cv2.waitKey(1)
@@ -207,8 +223,14 @@ def main():
             print(Style.BRIGHT + Fore.RED + "failed to grab frame" + Style.RESET_ALL)
             break
 
-        # process image
         image_p, mask = processImage(data["limits"], image)
+
+        # centroid initialization
+        centroid = None
+
+        # use mouse as brush
+        if args['use_mouse'] and mouse_coords['x'] is not None:
+            centroid = (mouse_coords['x'], mouse_coords['y'])
 
         connectivity = 4  
         # Perform the operation
@@ -219,64 +241,94 @@ def main():
             count = 0
             max_label, max_size = max([(i, stats[i, cv2.CC_STAT_AREA]) for i in range(1, nb_components)], key=lambda x: x[1])
 
-            mr = np.equal(labels, max_label)
+            # centroid coordinates
+            centroid = (int(centroids[max_label][0]), int(centroids[max_label][1]))
 
+            # highlight largest area
+            mr = np.equal(labels, max_label)
             b,g,r = cv2.split(image)
             b[mr] = 0
             r[mr] = 0
             g[mr] = 200
-            image = cv2.merge((b,g,r))
+            cam_output = cv2.merge((b,g,r))
 
             # put text and highlight the center
-            cv2.line(image, (int(centroids[max_label][0])+5, int(centroids[max_label][1])), (int(centroids[max_label][0])-5, int(centroids[max_label][1])), (0,0,255), 5, -1)
-            cv2.line(image, (int(centroids[max_label][0]), int(centroids[max_label][1])+5), (int(centroids[max_label][0]), int(centroids[max_label][1])-5), (0,0,255), 5, -1)
-            if last_point != None and brush:
-                cv2.line(painter, last_point, (int(centroids[max_label][0]), int(centroids[max_label][1])), color, size_brush, -1)
-            last_point = (int(centroids[max_label][0]), int(centroids[max_label][1]))
+            cv2.line(cam_output, (centroid[0]+5, centroid[1]), (centroid[0]-5, centroid[1]), (0,0,255), 5, -1)
+            cv2.line(cam_output, (centroid[0], centroid[1]+5), (centroid[0], centroid[1]-5), (0,0,255), 5, -1)
         else:
+            mr = np.zeros((frame.shape[0], frame.shape[1], 3))
             if count == 0:
                 print(Style.BRIGHT + Fore.RED + "Please place your object in front of the camera!" + Style.RESET_ALL)
                 count += 1
 
+        if last_point is not None and centroid is not None:
+            # get squared distance between current point and previous
+            distance = (last_point[0]-centroid[0])**2 + (last_point[1]-centroid[1])**2
+
+            # oscilation detected, draw a single point
+            if distance > shake_detection_threshold and args['use_shake_detection']:
+                cv2.circle(painter, centroid, size_brush, color, -1)
+            else:
+                if brush:
+                    cv2.line(painter, last_point, centroid, color, size_brush, -1)
+        last_point = centroid
+
+
         if args["video_canvas"]:
             mask = np.not_equal(cv2.cvtColor(painter, cv2.COLOR_BGR2GRAY), 255)
-            image[mask] = painter
-            painter = image
+            # Repeat mask along the three channels
+            mask = np.repeat(mask[:,:,np.newaxis], 3, axis=2)
+            output = image.copy()
+            output[mask] = painter[mask]
+        else:
+            output = painter
 
-        # show images
-        cv2.imshow(window_name, image)
-        cv2.imshow(window_name_paint, painter)
+        # flip camera and drawing horizontaly
+        cam_output = cv2.flip(cam_output, 1)  
+        output = cv2.flip(output, 1)  
+
+        cv2.imshow(window_name, cam_output)
+        cv2.imshow(window_name_paint, output)
         cv2.imshow(window_name_commands, commands(np.ones((frame.shape[0], frame.shape[1], 3)) * 0))
         cv2.imshow(window_name_segmented, image_p)
         cv2.imshow(window_name_area, mr.astype(np.uint8)*255)
 
         # user quits
         if k == ord("q"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"q"+Fore.RED+"\n\tEnding program")
             break
 
         # brush
-        if k == ord("+"):
+        elif k == ord("+"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"+"+"\n\tIncreasing"+Style.RESET_ALL+" brush size")
             size_brush += 1
-        if k == ord("-"):
+        elif k == ord("-"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"-"+"\n\tDecreasing"+Style.RESET_ALL+" brush size")
             size_brush = max(2, size_brush-1)
 
         # color
-        if k == ord("r"):
+        elif k == ord("r"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"r"+Style.RESET_ALL+"\n\tChanging color to "+Style.BRIGHT+Fore.RED+"RED"+Style.RESET_ALL)
             color = (0,0,255)
-        if k == ord("g"):
+        elif k == ord("g"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"g"+Style.RESET_ALL+"\n\tChanging color to "+Style.BRIGHT+Fore.GREEN+"GREEN"+Style.RESET_ALL)
             color = (0,255,0)
-        if k == ord("b"):
+        elif k == ord("b"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"b"+Style.RESET_ALL+"\n\tChanging color to "+Style.BRIGHT+Fore.BLUE+"BLUE"+Style.RESET_ALL)
             color = (255,0,0)
 
         # clear
-        if k == ord("c"):
-            painter = np.ones((frame.shape[0], frame.shape[1], 3)) * 255
+        elif k == ord("c"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"c"+Style.RESET_ALL+"\n\tClearing canvas")
+            painter = np.ones((height, width, 3), np.uint8) * 255
             if args["paint_numeric"]:
                 painter = temp
         
         # save
-        if k == ord("w"):
-            cv2.imwrite(f"drawing_{(time.ctime(time.time())).replace(' ', '_')}.png", painter)
+        elif k == ord("w"):
+            file_name = f"drawing_{(time.ctime(time.time())).replace(' ', '_')}.png"
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"w"+Style.RESET_ALL+"\n\tWriting to file " + Style.BRIGHT + Fore.GREEN + file_name + Style.RESET_ALL)
+            cv2.imwrite(file_name, output)
             if args["paint_numeric"]:
                 # do evaluation_painter
                 max_pixels = (frame.shape[0] * frame.shape[1] * 3) - total_pixels
@@ -284,7 +336,7 @@ def main():
 
                 accuracy = ((total_pixels / max_pixels) * 100)
 
-                print(f"Accuracy: {round(accuracy,2)}%")
+                print("Accuracy: "+Style.BRIGHT+Fore.GREEN+round(accuracy,2)+Style.RESET_ALL+"%")
 
                 if accuracy < 40:
                     print("Evaluation: "+ Style.BRIGHT + Fore.RED +"Not Sattisfactory - D" + Style.RESET_ALL)
@@ -305,17 +357,20 @@ def main():
 
         # extra keys
         # erase
-        if k == ord("e"):
+        elif k == ord("e"):
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"e"+Style.RESET_ALL+"\n\tErasing")
             color = (255,255,255)
 
         # switch brush
-        if k == ord("s"):
+        elif k == ord("s"):
             brush = False if brush else True
+            print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"s"+Style.RESET_ALL+"\n\tSwitching brush "+((Style.BRIGHT+Fore.GREEN+"ON") if brush else (Style.BRIGHT+Fore.RED+"OFF")) +Style.RESET_ALL)
 
 
     # end capture and destroy windows
     capture.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()
