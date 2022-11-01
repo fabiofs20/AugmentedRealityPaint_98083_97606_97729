@@ -8,11 +8,13 @@
 # PSR, October 2022.
 # -----------------------------------------------
 
+from calendar import c
 import cv2
 from functools import partial
 import numpy as np
 import copy
 import json
+from colorama import Fore, Back, Style
 
 def processImage(ranges, image):
 
@@ -35,7 +37,7 @@ def processImage(ranges, image):
     return image_processed
 
 def onTrackbar(value, channel, min_max, ranges):
-    print(f"Selected threshold {value} for limit {channel}{min_max}")
+    print("Selected threshold "+ Style.BRIGHT + Fore.YELLOW + str(value) + Style.RESET_ALL + " for limit " + Style.BRIGHT + Fore.GREEN + channel + min_max + Style.RESET_ALL)
 
     # update range values
     ranges[channel][min_max] = value
@@ -76,7 +78,7 @@ def main():
 
         # error getting the frame
         if not ret:
-            print("failed to grab frame")
+            print(Style.BRIGHT + Fore.RED + "Failed to grab frame" + Style.RESET_ALL)
             break
 
         # process image
@@ -93,7 +95,7 @@ def main():
         if k == ord("w"):
             file_name = 'limits.json'
             with open(file_name, 'w') as file_handle:
-                print('writing color limits to file ' + file_name)
+                print('writing color limits to file ' + Style.BRIGHT + Fore.GREEN + file_name + Style.RESET_ALL)
                 json.dump({"limits": ranges}, file_handle)
             print({"limits": ranges})
             break
