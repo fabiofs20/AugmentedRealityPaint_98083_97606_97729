@@ -271,6 +271,47 @@ def main():
             else:
                 if brush:
                     cv2.line(painter, last_point, centroid, color, size_brush, -1)
+                
+            #Drawing a square
+            if k == ord ("1"):
+                ix,iy = -1,-1
+                drawing = True
+                # mouse is being moved, draw a rectangle
+            elif centroid != (ix,iy) and k == ord ("1"): #(K == ord...) Ensures that this line of code is only triggered for this case
+                if drawing == True:
+                    cv2.rectangle(image, (ix, iy), centroid, color, size_brush)
+            # if the left mouse button was released, set the drawing flag to False
+            elif k == 13: #13 = Enter
+                drawing = False
+                
+            #Drawing a circle
+            if k == ord ("2"):
+                ix,iy = -1,-1
+                drawing = True
+                # mouse is being moved, draw a circle
+            elif centroid != (ix,iy) and k == ord("2"):#(K == ord...) Ensures that this line of code is only triggered for this case
+                if drawing == True:
+                    radius = (ix,iy)- centroid
+                    cv2.circle (image, (ix, iy), radius, color, size_brush)
+            # if the left mouse button was released, set the drawing flag to False
+            elif k == 13: #13 = Enter
+                drawing = False
+
+            #Drawing a elipse
+            if k == ord ("3"):
+                ix,iy = -1,-1
+                drawing = True
+                # mouse is being moved, draw an elipse
+            elif centroid != (ix,iy) and k == ord("3"): #(K == ord...) Ensures that this line of code is only triggered for this case 
+                if drawing == True:
+                    axis_lenght = 2*centroid
+                    cv2.ellipse(image,(ix,iy),(centroid),0,0,180,color,size_brush)
+            # if the left mouse button was released, set the drawing flag to False
+            elif k == 13: #13 = Enter
+                drawing = False
+
+
+                    
         last_point = centroid
 
 
