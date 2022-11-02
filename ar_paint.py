@@ -365,8 +365,61 @@ def main():
         elif k == ord("s"):
             brush = False if brush else True
             print("Key Selected: "+Style.BRIGHT+Fore.YELLOW+"s"+Style.RESET_ALL+"\n\tSwitching brush "+((Style.BRIGHT+Fore.GREEN+"ON") if brush else (Style.BRIGHT+Fore.RED+"OFF")) +Style.RESET_ALL)
+            
+ 
+    #Draw geometrics forms
+    def draw_rectanlge(event, x, y, flags, param):
+        if k == ord ("1"):
+            drawing = False # true if mouse is pressed
+            ix,iy = -1,-1
+            # if the left mouse button was clicked, record the starting and set the drawing flag to True
+            if event == cv2.EVENT_LBUTTONDOWN:
+                drawing = True
+            # mouse is being moved, draw rectangle
+            elif event == cv2.EVENT_MOUSEMOVE:
+                if drawing == True:
+                    cv2.rectangle(image, (ix, iy), (centroid), (255, 255, 0), size_brush)
+            # if the left mouse button was released, set the drawing flag to False
+            elif event == cv2.EVENT_LBUTTONUP:
+                drawing = False
 
+    #Draw circles
 
+    def draw_circle(event, x, y, flags, param):
+        if k == ord ("2"):
+            drawing = False # true if mouse is pressed
+            ix,iy = -1,-1
+            # if the left mouse button was clicked, record the starting and set the drawing flag to True
+            if event == cv2.EVENT_LBUTTONDOWN:
+                drawing = True
+            # mouse is being moved, draw circle
+            elif event == cv2.EVENT_MOUSEMOVE:
+                if drawing == True:
+                    radius = (ix,iy)- centroid
+                    cv2.circle (image, (ix, iy), radius, (255,0,0), size_brush)
+            # if the left mouse button was released, set the drawing flag to False
+            elif event == cv2.EVENT_LBUTTONUP:
+                drawing = False
+    
+    #Draw elipse
+    def draw_elipse(event, x, y, flags, param):
+        if k == ord ("3"):
+            drawing = False # true if mouse is pressed
+            ix,iy = -1,-1
+            # if the left mouse button was clicked, record the starting and set the drawing flag to True
+            if event == cv2.EVENT_LBUTTONDOWN:
+                drawing = True
+            # mouse is being moved, draw elipse
+            elif event == cv2.EVENT_MOUSEMOVE:
+                if drawing == True:
+                    axis_lenght = 2*centroid
+                    cv2.ellipse(image,(ix,iy),(centroid),0,0,180,255,size_brush)
+            # if the left mouse button was released, set the drawing flag to False
+            elif event == cv2.EVENT_LBUTTONUP:
+                drawing = False
+                
+                
+                
     # end capture and destroy windows
     capture.release()
     cv2.destroyAllWindows()
